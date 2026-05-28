@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitor MQ-135</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      margin: 0; padding: 20px;
+      background: #f5f7fa; color: #1a202c;
+      max-width: 720px; margin: 0 auto;
+    }
+    h1 {
+      font-size: 1.4rem; font-weight: 600;
+      margin: 0 0 24px 0; display: flex; align-items: center; gap: 8px;
+    }
+    .card {
+      background: white; border-radius: 12px;
+      padding: 24px; margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .big-number {
+      font-size: 4rem; font-weight: 700; line-height: 1;
+      margin-bottom: 8px; font-variant-numeric: tabular-nums;
+    }
+    .meta {
+      display: flex; flex-wrap: wrap; gap: 16px;
+      color: #718096; font-size: 0.9rem;
+    }
+    .meta strong { color: #2d3748; }
+    .status-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #cbd5e0; display: inline-block;
+    }
+    .status-dot.ok    { background: #48bb78; }
+    .status-dot.stale { background: #ed8936; }
+    .status-dot.err   { background: #e53e3e; }
+    canvas { width: 100% !important; }
+  </style>
+</head>
+<body>
+  <h1>
+    <span class="status-dot" id="statusDot"></span>
+    Monitor MQ-135
+  </h1>
+
+  <div class="card">
+    <div class="big-number" id="adcValue">--</div>
+    <div class="meta">
+      <span><strong id="voltage">--</strong> V (AO)</span>
+      <span>Última lectura: <strong id="updated">--</strong></span>
+      <span>RSSI: <strong id="rssi">--</strong></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <canvas id="chart"></canvas>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+    import { getDatabase, ref, onValue, query, limitToLast }
+      from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
+
+    // ============== CONFIGURA AQUÍ ==============
+    const firebaseConfig = {
+      databaseURL: "https://monitor-gas-mq135-d8c3d-default-rtdb.firebaseio.com"
+    };
+    // ============================================
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getDatabase(app);
+
+    const adcEl     = document.getElementById("adcValue");
+    const voltEl    = document.getElementById("voltage");
+    const updatedEl = document.getElementById("updated");
+    const rssiEl    = document.getElementById("rssi");
+    const dot       = document.getElementById("statusDot");
+
+    const chart = new Chart(document.getElementById("chart"), {
+      type: "line",
+      data: { labels: [], datasets: [{
+        label: "ADC", data: [],
+        borderColor: "#4299e1",
+        backgroundColor: "rgba(66,153,225,0.12)",
+        fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2
+      }]},
+      options: {
+        responsive: true, animation: false,
+        scales: { y: { beginAtZero: true }, x: { ticks: { maxTicksLimit: 6 } } },
+        plugins: { legend: { display: false } }
+      }
+    });
+
+    let ultimoTs = 0;
+
+    // Suscripción al valor actual (cambia en cada escritura del ESP32)
+    onValue(ref(db, "sensores/mq135/actual"), (snap) => {
+      const d = snap.val();
+      if (!d) { dot.className = "status-dot err"; return; }
+      adcEl.textContent     = d.adc ?? "--";
+      voltEl.textContent    = (d.voltaje ?? 0).toFixed(3);
+      rssiEl.textContent    = (d.rssi ?? "--") + " dBm";
+      updatedEl.textContent = new Date(d.ts).toLocaleTimeString();
+      ultimoTs = d.ts;
+      dot.className = "status-dot ok";
+    });
+
+    // Suscripción a los últimos 60 puntos del histórico
+    onValue(query(ref(db, "sensores/mq135/historico"), limitToLast(60)), (snap) => {
+      const data = snap.val();
+      if (!data) return;
+      const arr = Object.values(data).sort((a, b) => a.ts - b.ts);
+      chart.data.labels = arr.map(e => new Date(e.ts).toLocaleTimeString().slice(0, 5));
+      chart.data.datasets[0].data = arr.map(e => e.adc);
+      chart.update();
+    });
+
+    // Detector de "ya no llegan datos"
+    setInterval(() => {
+      if (!ultimoTs) return;
+      const edad_s = (Date.now() - ultimoTs) / 1000;
+      if (edad_s > 30) {
+        dot.className = "status-dot stale";
+        updatedEl.textContent = `hace ${Math.floor(edad_s)}s`;
+      }
+    }, 3000);
+  </script>
+</body>
+</html>
