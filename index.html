@@ -4,77 +4,189 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Monitor MQ-135</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Schibsted+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ---------- TEMA OSCURO (default) ---------- */
+    :root, body[data-theme="dark"] {
+      --bg: #080b0a; --surface: rgba(255,255,255,0.026); --border: rgba(255,255,255,0.075);
+      --text: #e7efe9; --dim: #6f817a; --grid: rgba(255,255,255,0.022); --shadow: none;
+      --accent: #2ee6a6; --glow: rgba(46,230,166,0.22);
+    }
+    body[data-theme="dark"][data-estado="elevado"] { --accent: #f7b733; --glow: rgba(247,183,51,0.22); }
+    body[data-theme="dark"][data-estado="alerta"]  { --accent: #ff5454; --glow: rgba(255,84,84,0.30); }
+
+    /* ---------- TEMA CLARO ---------- */
+    body[data-theme="light"] {
+      --bg: #edf1ef; --surface: #ffffff; --border: rgba(0,0,0,0.075);
+      --text: #16201c; --dim: #67756e; --grid: rgba(0,0,0,0.035);
+      --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 12px 30px rgba(0,0,0,0.045);
+      --accent: #07a06d; --glow: rgba(7,160,109,0.12);
+    }
+    body[data-theme="light"][data-estado="elevado"] { --accent: #d97706; --glow: rgba(217,119,6,0.13); }
+    body[data-theme="light"][data-estado="alerta"]  { --accent: #dc2626; --glow: rgba(220,38,38,0.16); }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-      margin: 0 auto; padding: 20px;
-      background: #f5f7fa; color: #1a202c; max-width: 720px;
+      font-family: "Schibsted Grotesk", sans-serif; color: var(--text); min-height: 100vh;
+      padding: 28px 20px 60px; transition: background-color 0.5s ease, color 0.5s ease;
+      background:
+        linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 100% 34px,
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 34px 100%,
+        var(--bg);
     }
-    h1 {
-      font-size: 1.4rem; font-weight: 600;
-      margin: 0 0 24px 0; display: flex; align-items: center; gap: 8px;
+    body::before {
+      content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background: radial-gradient(circle at 50% -8%, var(--glow), transparent 52%);
+      transition: background 0.7s ease;
     }
+    body[data-theme="dark"][data-estado="alerta"]::before,
+    body[data-theme="light"][data-estado="alerta"]::before { animation: pulse 2.2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+    .wrap { position: relative; z-index: 1; max-width: 760px; margin: 0 auto; }
+
+    /* Header */
+    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .dot {
+      width: 11px; height: 11px; border-radius: 50%; background: var(--accent);
+      box-shadow: 0 0 12px var(--accent); flex-shrink: 0; animation: blink 2.4s ease-in-out infinite;
+      transition: background 0.5s ease;
+    }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+    h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; }
+    .kicker { font-size: 0.72rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.22em; margin-top: 3px; }
+
+    /* Theme toggle */
+    .theme-toggle { background: none; border: none; padding: 0; cursor: pointer; }
+    .tt-track {
+      position: relative; display: inline-block; width: 58px; height: 30px; border-radius: 999px;
+      background: var(--surface); border: 1px solid var(--border); transition: all 0.4s ease;
+    }
+    .tt-knob {
+      position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%;
+      background: var(--text); display: grid; place-items: center;
+      transition: transform 0.3s cubic-bezier(.4,1.5,.5,1), background 0.4s ease;
+    }
+    body[data-theme="light"] .tt-knob { transform: translateX(28px); }
+    .tt-knob svg { width: 13px; height: 13px; color: var(--bg); }
+    .tt-knob .tt-sun { display: none; }
+    body[data-theme="light"] .tt-knob .tt-sun  { display: block; }
+    body[data-theme="light"] .tt-knob .tt-moon { display: none; }
+
+    /* Cards */
     .card {
-      background: white; border-radius: 12px; padding: 24px;
-      margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+      padding: 26px; margin-bottom: 16px; box-shadow: var(--shadow);
+      transition: background 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease;
     }
-    .big-number {
-      font-size: 4rem; font-weight: 700; line-height: 1;
-      margin-bottom: 8px; font-variant-numeric: tabular-nums;
+
+    /* Hero */
+    .reading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+    .value {
+      font-family: "JetBrains Mono", monospace; font-weight: 800; font-size: clamp(4.2rem, 19vw, 7rem);
+      line-height: 0.9; color: var(--accent); text-shadow: 0 0 44px var(--glow);
+      transition: color 0.5s ease, text-shadow 0.5s ease; font-variant-numeric: tabular-nums;
     }
-    .meta { display: flex; flex-wrap: wrap; gap: 16px; color: #718096; font-size: 0.9rem; }
-    .meta strong { color: #2d3748; }
-    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #cbd5e0; display: inline-block; }
-    .status-dot.ok { background: #48bb78; }
-    .status-dot.stale { background: #ed8936; }
-    .status-dot.err { background: #e53e3e; }
-    canvas { width: 100% !important; }
-    .ranges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .reading-side { text-align: right; padding-bottom: 8px; }
+    .estado { font-weight: 700; text-transform: uppercase; letter-spacing: 0.16em; font-size: 0.82rem; color: var(--accent); transition: color 0.5s ease; }
+    .unit { font-family: "JetBrains Mono", monospace; font-size: 0.82rem; color: var(--dim); margin-top: 6px; }
+    .meta { display: flex; gap: 28px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); flex-wrap: wrap; transition: border-color 0.5s ease; }
+    .meta span { display: flex; flex-direction: column; gap: 4px; font-size: 0.72rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.1em; }
+    .meta strong { font-family: "JetBrains Mono", monospace; font-size: 1rem; color: var(--text); font-weight: 700; letter-spacing: 0; text-transform: none; }
+
+    /* Ranges */
+    .ranges { display: flex; gap: 8px; margin-bottom: 16px; }
     .ranges button {
-      flex: 1; min-width: 64px; padding: 10px 12px;
-      border: 1px solid #e2e8f0; background: white; color: #4a5568;
-      border-radius: 8px; font-size: 0.9rem; cursor: pointer;
-      font-family: inherit; transition: all 0.15s;
+      flex: 1; padding: 11px 8px; font-family: inherit; font-size: 0.85rem; font-weight: 500;
+      color: var(--dim); background: var(--surface); border: 1px solid var(--border);
+      border-radius: 11px; cursor: pointer; transition: all 0.18s ease;
     }
-    .ranges button:hover { border-color: #cbd5e0; }
-    .ranges button.active { background: #4299e1; color: white; border-color: #4299e1; }
-    .stats { display: flex; gap: 24px; margin-bottom: 16px; font-size: 0.9rem; color: #718096; }
-    .stats div strong { display: block; color: #2d3748; font-size: 1.3rem; font-variant-numeric: tabular-nums; }
-    .chart-info { font-size: 0.8rem; color: #a0aec0; margin-top: 8px; text-align: right; }
+    .ranges button:hover { color: var(--text); }
+    .ranges button.active { color: var(--bg); background: var(--accent); border-color: var(--accent); font-weight: 700; box-shadow: 0 0 22px var(--glow); }
+
+    /* Stats */
+    .stats { display: flex; gap: 36px; margin-bottom: 22px; }
+    .stats div { display: flex; flex-direction: column; gap: 3px; }
+    .stats span { font-size: 0.7rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.12em; }
+    .stats strong { font-family: "JetBrains Mono", monospace; font-size: 1.45rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .chart-info { font-family: "JetBrains Mono", monospace; font-size: 0.7rem; color: var(--dim); margin-top: 12px; text-align: right; }
+
+    @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+    .reveal { animation: rise 0.65s cubic-bezier(.2,.8,.2,1) both; }
+    .d1 { animation-delay: 0.06s; } .d2 { animation-delay: 0.14s; } .d3 { animation-delay: 0.22s; }
+
+    @media (max-width: 480px) {
+      .stats { gap: 24px; }
+      .ranges button { padding: 10px 4px; font-size: 0.78rem; }
+    }
   </style>
 </head>
-<body>
-  <h1>
-    <span class="status-dot" id="statusDot"></span>
-    Monitor MQ-135
-  </h1>
+<body data-estado="limpio">
+  <script>
+    /* Anti-parpadeo: fija el tema antes de pintar */
+    (function(){
+      try {
+        var t = localStorage.getItem("tema") ||
+                (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+        document.body.dataset.theme = t;
+      } catch(e) { document.body.dataset.theme = "dark"; }
+    })();
+  </script>
 
-  <div class="card">
-    <div class="big-number" id="adcValue">--</div>
-    <div class="meta">
-      <span><strong id="voltage">--</strong> V (AO)</span>
-      <span>Última lectura: <strong id="updated">--</strong></span>
-      <span>RSSI: <strong id="rssi">--</strong></span>
-    </div>
-  </div>
+  <div class="wrap">
+    <header class="reveal">
+      <div class="brand">
+        <span class="dot" id="statusDot"></span>
+        <div>
+          <h1>Monitor MQ-135</h1>
+          <div class="kicker">Calidad del aire · en vivo</div>
+        </div>
+      </div>
+      <button class="theme-toggle" id="themeToggle" role="switch" aria-label="Cambiar entre tema claro y oscuro">
+        <span class="tt-track">
+          <span class="tt-knob">
+            <svg class="tt-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+            <svg class="tt-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          </span>
+        </span>
+      </button>
+    </header>
 
-  <div class="ranges" id="ranges">
-    <button data-range="5min" class="active">5 min</button>
-    <button data-range="1h">1 hora</button>
-    <button data-range="6h">6 horas</button>
-    <button data-range="24h">24 horas</button>
-    <button data-range="7d">7 días</button>
-  </div>
+    <section class="card hero reveal d1">
+      <div class="reading">
+        <div class="value" id="adcValue">--</div>
+        <div class="reading-side">
+          <div class="estado" id="estado">—</div>
+          <div class="unit">ADC · <span id="voltage">--</span> V</div>
+        </div>
+      </div>
+      <div class="meta">
+        <span>Última lectura<strong id="updated">--</strong></span>
+        <span>Señal Wi-Fi<strong id="rssi">--</strong></span>
+      </div>
+    </section>
 
-  <div class="card">
-    <div class="stats">
-      <div>Mínimo <strong id="statMin">--</strong></div>
-      <div>Promedio <strong id="statAvg">--</strong></div>
-      <div>Máximo <strong id="statMax">--</strong></div>
-    </div>
-    <canvas id="chart"></canvas>
-    <div class="chart-info" id="chartInfo"></div>
+    <nav class="ranges reveal d2" id="ranges">
+      <button data-range="5min" class="active">5 min</button>
+      <button data-range="1h">1 hora</button>
+      <button data-range="6h">6 horas</button>
+      <button data-range="24h">24 horas</button>
+      <button data-range="7d">7 días</button>
+    </nav>
+
+    <section class="card reveal d3">
+      <div class="stats">
+        <div><span>Mínimo</span><strong id="statMin">--</strong></div>
+        <div><span>Promedio</span><strong id="statAvg">--</strong></div>
+        <div><span>Máximo</span><strong id="statMax">--</strong></div>
+      </div>
+      <canvas id="chart"></canvas>
+      <div class="chart-info" id="chartInfo"></div>
+    </section>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -87,12 +199,13 @@
     const firebaseConfig = {
       databaseURL: "https://monitor-gas-mq135-d8c3d-default-rtdb.firebaseio.com"
     };
+    const UMBRAL_ELEVADO = 70;
+    const UMBRAL_ALERTA  = 140;
     // ============================================
 
     const app = initializeApp(firebaseConfig);
     const db  = getDatabase(app);
 
-    // n = nº de lecturas a traer (a 5s/lectura). live = se actualiza en tiempo real.
     const RANGOS = {
       "5min": { n: 60,     ms: 5*60*1000,        live: true  },
       "1h":   { n: 720,    ms: 60*60*1000,       live: false },
@@ -101,53 +214,96 @@
       "7d":   { n: 120960, ms: 7*24*60*60*1000,  live: false }
     };
     const MAX_PUNTOS = 600;
+    const ETIQUETA = { limpio: "Aire limpio", elevado: "Elevado", alerta: "Alerta" };
+    const PALETA = {
+      dark:  { lo:"46,230,166", mid:"247,183,51", hi:"255,84,84" },
+      light: { lo:"7,160,109",  mid:"217,119,6",  hi:"220,38,38" }
+    };
 
     const adcEl=document.getElementById("adcValue"), voltEl=document.getElementById("voltage"),
           updatedEl=document.getElementById("updated"), rssiEl=document.getElementById("rssi"),
-          dot=document.getElementById("statusDot"), statMin=document.getElementById("statMin"),
+          estadoEl=document.getElementById("estado"), statMin=document.getElementById("statMin"),
           statMax=document.getElementById("statMax"), statAvg=document.getElementById("statAvg"),
           chartInfo=document.getElementById("chartInfo");
+
+    const tema = () => document.body.dataset.theme || "dark";
+    const clasificar = (adc) => adc >= UMBRAL_ALERTA ? "alerta" : adc >= UMBRAL_ELEVADO ? "elevado" : "limpio";
+
+    function grad(ctx, area, alpha) {
+      if (!area) return "#2ee6a6";
+      const p = PALETA[tema()];
+      const g = ctx.createLinearGradient(0, area.bottom, 0, area.top);
+      g.addColorStop(0,   `rgba(${p.lo},${alpha})`);
+      g.addColorStop(0.5, `rgba(${p.mid},${alpha})`);
+      g.addColorStop(1,   `rgba(${p.hi},${alpha})`);
+      return g;
+    }
 
     const chart = new Chart(document.getElementById("chart"), {
       type: "line",
       data: { labels: [], datasets: [{
-        label: "ADC", data: [], borderColor: "#4299e1",
-        backgroundColor: "rgba(66,153,225,0.12)",
-        fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2
+        data: [], fill: true, tension: 0.32, pointRadius: 0, borderWidth: 2.2,
+        borderColor: (c) => grad(c.chart.ctx, c.chart.chartArea, 1),
+        backgroundColor: (c) => grad(c.chart.ctx, c.chart.chartArea, 0.14)
       }]},
       options: {
         responsive: true, animation: false,
-        scales: { y: { beginAtZero: true }, x: { ticks: { maxTicksLimit: 7, maxRotation: 0 } } },
+        scales: {
+          y: { beginAtZero: true, suggestedMax: 250, grid: {}, ticks: { font: { family: "JetBrains Mono", size: 10 } } },
+          x: { grid: {}, ticks: { maxTicksLimit: 7, maxRotation: 0, font: { family: "JetBrains Mono", size: 10 } } }
+        },
         plugins: { legend: { display: false } }
       }
     });
+
+    function colorearChart() {
+      const claro = tema() === "light";
+      const eje  = claro ? "#67756e" : "#6f817a";
+      chart.options.scales.y.ticks.color = eje;
+      chart.options.scales.x.ticks.color = eje;
+      chart.options.scales.y.grid.color  = claro ? "rgba(0,0,0,0.06)"  : "rgba(255,255,255,0.05)";
+      chart.options.scales.x.grid.color  = claro ? "rgba(0,0,0,0.035)" : "rgba(255,255,255,0.03)";
+      chart.update();
+    }
+
+    // ---- Toggle de tema ----
+    function aplicarTema(t) {
+      document.body.dataset.theme = t;
+      try { localStorage.setItem("tema", t); } catch(e) {}
+      colorearChart();
+    }
+    document.getElementById("themeToggle").addEventListener("click", () => {
+      aplicarTema(tema() === "light" ? "dark" : "light");
+    });
+    colorearChart(); // colorea según el tema ya fijado por el script anti-parpadeo
 
     // ---- Valor actual: SIEMPRE en vivo ----
     let ultimoTs = 0;
     onValue(ref(db, "sensores/mq135/actual"), (snap) => {
       const d = snap.val();
-      if (!d) { dot.className = "status-dot err"; return; }
-      adcEl.textContent     = d.adc ?? "--";
+      if (!d) return;
+      const adc = d.adc ?? 0;
+      adcEl.textContent     = adc;
       voltEl.textContent    = (d.voltaje ?? 0).toFixed(3);
       rssiEl.textContent    = (d.rssi ?? "--") + " dBm";
       updatedEl.textContent = new Date(d.ts).toLocaleTimeString();
       ultimoTs = d.ts;
-      dot.className = "status-dot ok";
+      const estado = clasificar(adc);
+      document.body.dataset.estado = estado;
+      estadoEl.textContent = ETIQUETA[estado];
     });
     setInterval(() => {
       if (!ultimoTs) return;
       const edad = (Date.now() - ultimoTs) / 1000;
-      if (edad > 30) { dot.className = "status-dot stale"; updatedEl.textContent = `hace ${Math.floor(edad)}s`; }
+      if (edad > 30) updatedEl.textContent = `hace ${Math.floor(edad)}s`;
     }, 3000);
 
     // ---- Utilidades de la gráfica ----
     function decimar(arr, max) {
       if (arr.length <= max) return arr;
       const tam = Math.ceil(arr.length / max), out = [];
-      for (let i = 0; i < arr.length; i += tam) {
-        const bloque = arr.slice(i, i + tam);
-        out.push(bloque.reduce((a, b) => (b.adc > a.adc ? b : a)));  // conserva el pico
-      }
+      for (let i = 0; i < arr.length; i += tam)
+        out.push(arr.slice(i, i + tam).reduce((a, b) => (b.adc > a.adc ? b : a)));
       return out;
     }
     function fmtLabel(ts, ms) {
@@ -158,7 +314,7 @@
     }
     function actualizarStats(arr) {
       if (!arr.length) { statMin.textContent=statMax.textContent=statAvg.textContent="--"; return; }
-      let min=Infinity, max=-Infinity, sum=0;             // bucle, no spread (evita crash con muchos puntos)
+      let min=Infinity, max=-Infinity, sum=0;
       for (const e of arr) { if (e.adc<min) min=e.adc; if (e.adc>max) max=e.adc; sum+=e.adc; }
       statMin.textContent = min; statMax.textContent = max; statAvg.textContent = Math.round(sum/arr.length);
     }
@@ -172,11 +328,11 @@
       chart.data.datasets[0].data = arr.map(e => e.adc);
       chart.update();
       chartInfo.textContent = full.length > arr.length
-        ? `${full.length} lecturas (mostrando ${arr.length}, picos conservados)`
+        ? `${full.length} lecturas · mostrando ${arr.length} (picos conservados)`
         : `${full.length} lecturas`;
     }
 
-    // ---- Gestión del rango activo ----
+    // ---- Rango activo ----
     let limpiar = null;
     function activarRango(clave) {
       if (limpiar) { limpiar(); limpiar = null; }
@@ -184,16 +340,14 @@
       chartInfo.textContent = "Cargando...";
       const q = query(ref(db, "sensores/mq135/historico"), limitToLast(cfg.n));
       if (cfg.live) {
-        limpiar = onValue(q, (snap) => pintar(snap.val(), cfg));     // tiempo real
+        limpiar = onValue(q, (snap) => pintar(snap.val(), cfg));
       } else {
-        const cargar = () => get(q).then(s => pintar(s.val(), cfg))
-                                   .catch(e => chartInfo.textContent = "Error: " + e.message);
+        const cargar = () => get(q).then(s => pintar(s.val(), cfg)).catch(e => chartInfo.textContent = "Error: " + e.message);
         cargar();
-        const id = setInterval(cargar, 60000);                       // refresca cada minuto
+        const id = setInterval(cargar, 60000);
         limpiar = () => clearInterval(id);
       }
     }
-
     document.getElementById("ranges").addEventListener("click", (e) => {
       const btn = e.target.closest("button"); if (!btn) return;
       document.querySelectorAll("#ranges button").forEach(b => b.classList.remove("active"));
@@ -201,7 +355,7 @@
       activarRango(btn.dataset.range);
     });
 
-    activarRango("5min");  // arranque por defecto
+    activarRango("5min");
   </script>
 </body>
 </html>
