@@ -8,36 +8,40 @@
     * { box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-      margin: 0; padding: 20px;
-      background: #f5f7fa; color: #1a202c;
-      max-width: 720px; margin: 0 auto;
+      margin: 0 auto; padding: 20px;
+      background: #f5f7fa; color: #1a202c; max-width: 720px;
     }
     h1 {
       font-size: 1.4rem; font-weight: 600;
       margin: 0 0 24px 0; display: flex; align-items: center; gap: 8px;
     }
     .card {
-      background: white; border-radius: 12px;
-      padding: 24px; margin-bottom: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      background: white; border-radius: 12px; padding: 24px;
+      margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
     .big-number {
       font-size: 4rem; font-weight: 700; line-height: 1;
       margin-bottom: 8px; font-variant-numeric: tabular-nums;
     }
-    .meta {
-      display: flex; flex-wrap: wrap; gap: 16px;
-      color: #718096; font-size: 0.9rem;
-    }
+    .meta { display: flex; flex-wrap: wrap; gap: 16px; color: #718096; font-size: 0.9rem; }
     .meta strong { color: #2d3748; }
-    .status-dot {
-      width: 10px; height: 10px; border-radius: 50%;
-      background: #cbd5e0; display: inline-block;
-    }
-    .status-dot.ok    { background: #48bb78; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #cbd5e0; display: inline-block; }
+    .status-dot.ok { background: #48bb78; }
     .status-dot.stale { background: #ed8936; }
-    .status-dot.err   { background: #e53e3e; }
+    .status-dot.err { background: #e53e3e; }
     canvas { width: 100% !important; }
+    .ranges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .ranges button {
+      flex: 1; min-width: 64px; padding: 10px 12px;
+      border: 1px solid #e2e8f0; background: white; color: #4a5568;
+      border-radius: 8px; font-size: 0.9rem; cursor: pointer;
+      font-family: inherit; transition: all 0.15s;
+    }
+    .ranges button:hover { border-color: #cbd5e0; }
+    .ranges button.active { background: #4299e1; color: white; border-color: #4299e1; }
+    .stats { display: flex; gap: 24px; margin-bottom: 16px; font-size: 0.9rem; color: #718096; }
+    .stats div strong { display: block; color: #2d3748; font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+    .chart-info { font-size: 0.8rem; color: #a0aec0; margin-top: 8px; text-align: right; }
   </style>
 </head>
 <body>
@@ -55,14 +59,28 @@
     </div>
   </div>
 
+  <div class="ranges" id="ranges">
+    <button data-range="5min" class="active">5 min</button>
+    <button data-range="1h">1 hora</button>
+    <button data-range="6h">6 horas</button>
+    <button data-range="24h">24 horas</button>
+    <button data-range="7d">7 días</button>
+  </div>
+
   <div class="card">
+    <div class="stats">
+      <div>Mínimo <strong id="statMin">--</strong></div>
+      <div>Promedio <strong id="statAvg">--</strong></div>
+      <div>Máximo <strong id="statMax">--</strong></div>
+    </div>
     <canvas id="chart"></canvas>
+    <div class="chart-info" id="chartInfo"></div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-    import { getDatabase, ref, onValue, query, limitToLast }
+    import { getDatabase, ref, onValue, query, limitToLast, get }
       from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
 
     // ============== CONFIGURA AQUÍ ==============
@@ -74,30 +92,38 @@
     const app = initializeApp(firebaseConfig);
     const db  = getDatabase(app);
 
-    const adcEl     = document.getElementById("adcValue");
-    const voltEl    = document.getElementById("voltage");
-    const updatedEl = document.getElementById("updated");
-    const rssiEl    = document.getElementById("rssi");
-    const dot       = document.getElementById("statusDot");
+    // n = nº de lecturas a traer (a 5s/lectura). live = se actualiza en tiempo real.
+    const RANGOS = {
+      "5min": { n: 60,     ms: 5*60*1000,        live: true  },
+      "1h":   { n: 720,    ms: 60*60*1000,       live: false },
+      "6h":   { n: 4320,   ms: 6*60*60*1000,     live: false },
+      "24h":  { n: 17280,  ms: 24*60*60*1000,    live: false },
+      "7d":   { n: 120960, ms: 7*24*60*60*1000,  live: false }
+    };
+    const MAX_PUNTOS = 600;
+
+    const adcEl=document.getElementById("adcValue"), voltEl=document.getElementById("voltage"),
+          updatedEl=document.getElementById("updated"), rssiEl=document.getElementById("rssi"),
+          dot=document.getElementById("statusDot"), statMin=document.getElementById("statMin"),
+          statMax=document.getElementById("statMax"), statAvg=document.getElementById("statAvg"),
+          chartInfo=document.getElementById("chartInfo");
 
     const chart = new Chart(document.getElementById("chart"), {
       type: "line",
       data: { labels: [], datasets: [{
-        label: "ADC", data: [],
-        borderColor: "#4299e1",
+        label: "ADC", data: [], borderColor: "#4299e1",
         backgroundColor: "rgba(66,153,225,0.12)",
         fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2
       }]},
       options: {
         responsive: true, animation: false,
-        scales: { y: { beginAtZero: true }, x: { ticks: { maxTicksLimit: 6 } } },
+        scales: { y: { beginAtZero: true }, x: { ticks: { maxTicksLimit: 7, maxRotation: 0 } } },
         plugins: { legend: { display: false } }
       }
     });
 
+    // ---- Valor actual: SIEMPRE en vivo ----
     let ultimoTs = 0;
-
-    // Suscripción al valor actual (cambia en cada escritura del ESP32)
     onValue(ref(db, "sensores/mq135/actual"), (snap) => {
       const d = snap.val();
       if (!d) { dot.className = "status-dot err"; return; }
@@ -108,26 +134,74 @@
       ultimoTs = d.ts;
       dot.className = "status-dot ok";
     });
-
-    // Suscripción a los últimos 60 puntos del histórico
-    onValue(query(ref(db, "sensores/mq135/historico"), limitToLast(60)), (snap) => {
-      const data = snap.val();
-      if (!data) return;
-      const arr = Object.values(data).sort((a, b) => a.ts - b.ts);
-      chart.data.labels = arr.map(e => new Date(e.ts).toLocaleTimeString().slice(0, 5));
-      chart.data.datasets[0].data = arr.map(e => e.adc);
-      chart.update();
-    });
-
-    // Detector de "ya no llegan datos"
     setInterval(() => {
       if (!ultimoTs) return;
-      const edad_s = (Date.now() - ultimoTs) / 1000;
-      if (edad_s > 30) {
-        dot.className = "status-dot stale";
-        updatedEl.textContent = `hace ${Math.floor(edad_s)}s`;
-      }
+      const edad = (Date.now() - ultimoTs) / 1000;
+      if (edad > 30) { dot.className = "status-dot stale"; updatedEl.textContent = `hace ${Math.floor(edad)}s`; }
     }, 3000);
+
+    // ---- Utilidades de la gráfica ----
+    function decimar(arr, max) {
+      if (arr.length <= max) return arr;
+      const tam = Math.ceil(arr.length / max), out = [];
+      for (let i = 0; i < arr.length; i += tam) {
+        const bloque = arr.slice(i, i + tam);
+        out.push(bloque.reduce((a, b) => (b.adc > a.adc ? b : a)));  // conserva el pico
+      }
+      return out;
+    }
+    function fmtLabel(ts, ms) {
+      const d = new Date(ts);
+      if (ms <= 3600000)  return d.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+      if (ms <= 86400000) return d.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+      return d.toLocaleString([], { weekday:"short", hour:"2-digit", minute:"2-digit" });
+    }
+    function actualizarStats(arr) {
+      if (!arr.length) { statMin.textContent=statMax.textContent=statAvg.textContent="--"; return; }
+      let min=Infinity, max=-Infinity, sum=0;             // bucle, no spread (evita crash con muchos puntos)
+      for (const e of arr) { if (e.adc<min) min=e.adc; if (e.adc>max) max=e.adc; sum+=e.adc; }
+      statMin.textContent = min; statMax.textContent = max; statAvg.textContent = Math.round(sum/arr.length);
+    }
+    function pintar(data, cfg) {
+      if (!data) { chart.data.labels=[]; chart.data.datasets[0].data=[]; chart.update();
+                   actualizarStats([]); chartInfo.textContent="Sin datos en este rango"; return; }
+      const full = Object.values(data).sort((a, b) => a.ts - b.ts);
+      actualizarStats(full);
+      const arr = decimar(full, MAX_PUNTOS);
+      chart.data.labels = arr.map(e => fmtLabel(e.ts, cfg.ms));
+      chart.data.datasets[0].data = arr.map(e => e.adc);
+      chart.update();
+      chartInfo.textContent = full.length > arr.length
+        ? `${full.length} lecturas (mostrando ${arr.length}, picos conservados)`
+        : `${full.length} lecturas`;
+    }
+
+    // ---- Gestión del rango activo ----
+    let limpiar = null;
+    function activarRango(clave) {
+      if (limpiar) { limpiar(); limpiar = null; }
+      const cfg = RANGOS[clave];
+      chartInfo.textContent = "Cargando...";
+      const q = query(ref(db, "sensores/mq135/historico"), limitToLast(cfg.n));
+      if (cfg.live) {
+        limpiar = onValue(q, (snap) => pintar(snap.val(), cfg));     // tiempo real
+      } else {
+        const cargar = () => get(q).then(s => pintar(s.val(), cfg))
+                                   .catch(e => chartInfo.textContent = "Error: " + e.message);
+        cargar();
+        const id = setInterval(cargar, 60000);                       // refresca cada minuto
+        limpiar = () => clearInterval(id);
+      }
+    }
+
+    document.getElementById("ranges").addEventListener("click", (e) => {
+      const btn = e.target.closest("button"); if (!btn) return;
+      document.querySelectorAll("#ranges button").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      activarRango(btn.dataset.range);
+    });
+
+    activarRango("5min");  // arranque por defecto
   </script>
 </body>
 </html>

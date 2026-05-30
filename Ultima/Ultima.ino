@@ -8,8 +8,8 @@
 #include <WiFiClientSecure.h>
 
 // ---------- CONFIGURA ESTAS LÍNEAS ----------
-const char* WIFI_SSID     = "Wi-Fi IPN"; // INFINITUM9DB3
-const char* WIFI_PASSWORD = "";   // vacío si la red es abierta - u72fUvpDUk
+const char* WIFI_SSID     = "Wifi_Isla"; // INFINITUM9DB3
+const char* WIFI_PASSWORD = "fQfK65uH2#%";   // vacío si la red es abierta - u72fUvpDUk
 
 // Tu URL de Firebase SIN la barra final
 const char* FIREBASE_HOST = "https://monitor-gas-mq135-d8c3d-default-rtdb.firebaseio.com";
